@@ -14,6 +14,16 @@ from .utils import has_permission
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 
+from datetime import datetime, timedelta
+
+from .models import TrainingEnquery
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+
+from training_management.utility.email_functionality import send_welcome_email, send_enquiry_email,send_custom_email
+
+User = get_user_model()
+
 
 class ProgrammingLanguageListCreateView(APIView):
     model = ProgrammingLanguage
@@ -411,12 +421,20 @@ class TrainingEnqueryListCreateView(APIView):
         try:
             data = request.data.copy()
             data['created_by'] = request.user.id
+            data['status'] = 'Enquiry'
             serializer = self.serializer_class(data=data)
             if serializer.is_valid():
                 serializer.save()
+                email = request.data.get('email')
+                send_custom_email(
+                    subject="Welcome to Our App!",
+                    message="Thank you for registering.",
+                    recipient_list=[email]
+                )
                 return Response({"message": "Enquiry created successfully",
                         "data": serializer.data},
                         status=status.HTTP_201_CREATED)
+            
             return Response({"message": "Validation error",
                     "data": serializer.errors},
                     status=status.HTTP_400_BAD_REQUEST)
@@ -490,9 +508,6 @@ class TrainingEnqueryDetailView(APIView):
             return Response({"message":str(e)}, 
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-class TrainingEnqueryStartListView(APIView):
-    ...
-        
 
 class CourseEnrollmentListCreateView(APIView):
     model = CourseEnrollment
@@ -507,20 +522,34 @@ class CourseEnrollmentListCreateView(APIView):
         except Exception as e:
             return Response({"message":str(e),
                              "data":None},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def post(self, request):
         try:
             data = request.data.copy()
             data['created_by'] = request.user.id
+            print("\n\n\n")
+            print("data view : ", data)
+
             serializer = CourseEnrollmentSerializer(data = data)
             if serializer.is_valid():
-                serializer.save(created_by = request.user)
-                return Response({"message":"Course Enrollment created successfully","data":serializer.data}, status=status.HTTP_201_CREATED)
-            return Response({"message":"validation error","data":serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                print("validation done")
+                serializer.save()
+                print("instance is saved")
+                return Response({
+                    "message":"Course Enrollment created successfully",
+                    "data":serializer.data}, 
+                    status=status.HTTP_201_CREATED)
+            return Response({
+                "message":"validation error",
+                "data":serializer.errors}, 
+                status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"message":str(e),"data":None}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message":str(e),"data":None}, 
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 class CourseEnrollmentDetailView(APIView):
+
     def get_object(self, pk):
         return get_object_or_404(CourseEnrollment,pk=pk)
     
@@ -536,7 +565,7 @@ class CourseEnrollmentDetailView(APIView):
             return Response({"message": "Course Enrollment Created successfully", "data": serializer.data}, status= status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"message": str(e), "data": None}, status= status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
     def put(self, request, pk):
         try:
             obj = self.get_object(pk)
@@ -565,4 +594,3 @@ class CourseEnrollmentDetailView(APIView):
             return Response({"message": "Course Enrollment deleted successfully", "data": None}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"message":str(e), "data": None}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        

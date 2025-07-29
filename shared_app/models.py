@@ -111,4 +111,26 @@ class CourseEnrollment(CommonModel):
             raise ValidationError("End date must be after start date.")
 
     def __str__(self):
-        return f"{self.student.username} enrolled in {self.course}"
+        return f"{self.student.email} enrolled in {self.course}"
+
+
+class CourseEnrollmentExtensionLog(CommonModel):
+    enrollment = models.ForeignKey(CourseEnrollment, on_delete=models.CASCADE)
+    new_end_date = models.DateField()
+    remark = models.TextField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+
+
+class FeeInformation(CommonModel):
+    enrollment = models.ForeignKey(CourseEnrollment, on_delete=models.CASCADE)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2)
+
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.enrollment.student} paid {self.amount_paid}"
+
+
+class TeacherCourseEnrollmentMapping(CommonModel):
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name="teacher")
+    course_enrollment = models.ForeignKey(CourseEnrollment, on_delete=models.CASCADE)
