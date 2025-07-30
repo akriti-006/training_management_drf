@@ -5,7 +5,8 @@ from .views import (
     FrameworkListCreateView, FrameworkDetailView,
     CourseDataListCreateView, CourseDataDetailView,
     TrainingEnqueryListCreateView, TrainingEnqueryDetailView,
-    CourseEnrollmentListCreateView, CourseEnrollmentDetailView
+    CourseEnrollmentListCreateView, CourseEnrollmentDetailView,
+    FeeInformationListCreateView, FeeInformationDetailView
 )
 
 urlpatterns = [
@@ -15,13 +16,16 @@ urlpatterns = [
     path('frameworks/', FrameworkListCreateView.as_view(), name='framework-list-create'),
     path('frameworks/<int:pk>/', FrameworkDetailView.as_view(), name='framework-detail'),
 
-    path('courses/', CourseDataListCreateView.as_view(), name='course-list-craete'),
+    path('courses/', CourseDataListCreateView.as_view(), name='course-list-create'),
     path('courses/<int:pk>/', CourseDataDetailView.as_view(), name='course-data-detail'),
 
-    path('enquiry/', TrainingEnqueryListCreateView.as_view(), name='enquiry-list-craete'),
+    path('enquiry/', TrainingEnqueryListCreateView.as_view(), name='enquiry-list-create'),
     path('enquiry/<int:pk>/', TrainingEnqueryDetailView.as_view(), name='enquiry-data-detail'),
 
-    path('enrollments/', CourseEnrollmentListCreateView.as_view(), name='enrollment-list-craete'),
-    path('enrollments/<int:pk>/', CourseEnrollmentDetailView.as_view(), name='enrollment-data-detail'),
+    path('enrollments/', CourseEnrollmentListCreateView.as_view(), name='enrollment-list-create'),
+    path('enrollments/<int:pk>/', CourseEnrollmentDetailView.as_view(), name='enrollment-detail'),
+
+    path('fee-info/', FeeInformationListCreateView.as_view(), name='fee-info-list-create'),
+    path('fee-info/<int:pk>', FeeInformationDetailView.as_view(), name='fee-info-detail'),
 
 ]

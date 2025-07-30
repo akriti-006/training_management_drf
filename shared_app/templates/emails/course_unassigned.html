@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Unassignment - Shared App</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+            text-align: center;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        .container {
+            background: linear-gradient(135deg, #ffffff, #f9fbfd);
+            margin: 30px auto;
+            padding: 40px 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            animation: slideUp 1.2s ease-out;
+        }
+
+        h2 {
+            color: #4ba3d9;
+            margin-bottom: 12px;
+            font-size: 28px;
+        }
+
+        p {
+            margin: 12px 0;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .button {
+            display: inline-block;
+            margin: 25px 0;
+            padding: 12px 35px;
+            background: linear-gradient(135deg, #4ba3d9, #85c5ed);
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: background 0.4s ease, transform 0.3s ease;
+        }
+
+        .button:hover {
+            background: linear-gradient(135deg, #3998c9, #6ab7e4);
+            transform: scale(1.05);
+        }
+
+        .footer {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 30px;
+        }
+
+        a {
+            color: #4ba3d9;
+            text-decoration: underline;
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Course Unassignment Notification</h2>
+        <p>Hi <strong>{{first_name}} {{last_name}}</strong>,</p>
+        <p>We wanted to inform you that you have been unassigned from the following course:</p>
+
+        <p><strong>📚 Course Name:</strong> {{course_name}}</p>
+        <p><strong>🗓️ Scheduled Dates:</strong> {{start_date}} to {{end_date}}</p>
+
+        <p>This means you will no longer have access to this course in your dashboard.</p>
+
+        <p>If you believe this change was made in error or if you’d like to re-enroll in the course, please contact our support team for assistance.</p>
+
+        <a href="{{support_link}}" class="button">Contact Support</a>
+
+        <p>We’re here to help you continue your learning journey in any way we can.</p>
+
+        <p>Best regards,<br><strong>Team AVIOX Technologies</strong></p>
+
+        <div class="footer">
+            <p>Need help? Contact us at <a href="#">contactus@avioxtechnologies.com</a></p>
+        </div>
+    </div>
+</body>
+
+</html>

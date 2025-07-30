@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from .serializers import LoginSerializer
+from training_management.utility.email_functionality import send_welcome_email, send_enquiry_email
 
 # class RegisterAPIView(APIView):
 #     permission_classes = [AllowAny]
@@ -35,8 +36,7 @@ class LoginAPIView(APIView):
             serializer = LoginSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.user
-                token, created = Token.objects.get_or_create(user=user)
-
+                token, created = Token.objects.get_or_create(user=user)      
                 return Response({
                     "message": "Login successful",
                     "data": {

@@ -1,6 +1,12 @@
 from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
-from .models import ProgrammingLanguage, Framework, CourseData,TrainingEnquery, CourseEnrollment
+from .models import (
+    ProgrammingLanguage, Framework, 
+    CourseData, TrainingEnquery, CourseEnrollment, FeeInformation
+)
+
+from django.db.models import Sum
+
 from rest_framework import serializers
 User = get_user_model()
 
@@ -188,22 +194,30 @@ class CourseEnrollmentSerializer(BaseSerializer):
         # Optionally customize student and course representations
         data['student'] = {
             "id": instance.student.id,
-            "email": instance.student.email,
             "first_name": instance.student.first_name,
-            "last_name": instance.student.last_name
+            "last_name": instance.student.last_name,
+            "email": instance.student.email
         }
 
         data['course'] = {
             "id": instance.course.id,
-            "name":instance.course.name
+            "name":instance.course.name,
+            "duration":instance.course.duration_in_weeks,
+            "total_fees":instance.course.total_fee
         }
 
-        # Remove write-only fields from response
-        data.pop('training_enquery', None)
-        data.pop('fee_amount', None)
-        data.pop('password', None)
+        # fees = FeeInformation.objects.filter(enrollment_id=instance, is_deleted=False)
+        fees = instance.feeinformation_set.filter(enrollment_id=instance, is_deleted=False)
+        serializer = FeeInformationSerializer(fees, many = True)
 
-        print("inside end od to_represent")
+        total_paid = fees.aggregate(total=Sum('amount_paid'))['total'] or 0
+
+        # Build the response
+        data['fee Info'] = {
+            "total_fees":instance.course.total_fee,
+            "total_paid": total_paid,
+            "installments": serializer.data
+        }
 
         return data
     
@@ -212,11 +226,63 @@ class CourseEnrollmentSerializer(BaseSerializer):
         print("B4 validated_data : ", validated_data)
         
         validated_data.pop('training_enquery')
-        validated_data.pop('fee_amount')
+        fee_amount = validated_data.pop('fee_amount')
         validated_data.pop('password')
 
         print("After : ", validated_data)
         # You can modify validated_data or perform extra actions
 
         instance = CourseEnrollment.objects.create(**validated_data)
+
+        # CourseEnrollment instance is saved, next step is to create FeeInformation
+        new_data = {}
+        new_data['enrollment'] = instance.id
+        new_data['amount_paid'] = fee_amount
+        new_data['created_by'] = instance.created_by.id
+
+        print("new_data : ", new_data)
+
+        serializer = FeeInformationSerializer(data = new_data)
+        if serializer.is_valid():
+            serializer.save()
+
+        print("data is saved for FeeInformation")
+
         return instance
+
+
+class FeeInformationSerializer(BaseSerializer):
+    class Meta:
+        model = FeeInformation
+        fields = '__all__'
+
+    def validate(self,data):
+        enrollment = data.get('enrollment')
+        amount_paid = data.get('amount_paid')
+
+        obj = FeeInformation.objects.filter(enrollment=enrollment, is_deleted=False)
+        total_amount_paid = obj.aggregate(total=Sum('amount_paid'))['total'] or 0
+
+        course_fee = enrollment.course.total_fee
+
+        pending_amount = course_fee - total_amount_paid
+
+        if amount_paid > pending_amount:
+            raise serializers.ValidationError(
+                    {f"Your pending fee is {pending_amount}"}
+                )
+                
+        print("\n\n\n")
+        print("amount_paid: ",amount_paid)
+        print("total_amount_paid: ",total_amount_paid)
+        print("enrollment: ",type(enrollment))
+
+        if enrollment and amount_paid:
+            total_amount = enrollment.course.total_fee
+            if amount_paid > total_amount:
+                raise serializers.ValidationError(
+                    {"Amount paid cannot be greater than the course total fees."}
+                )
+        
+        return data
+    

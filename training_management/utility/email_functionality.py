@@ -46,7 +46,6 @@ def send_welcome_email(training_enquiry_obj, password, start_date, end_date, is_
     print("DONE")
 
 
-
 def send_enquiry_email(training_enquiry_obj):
     print('\n\n\n')
     print("inside Enquiry_email")
@@ -82,6 +81,7 @@ def send_enquiry_email(training_enquiry_obj):
         print("Error in sending email.")
 
     print("DONE")
+
     
 def send_new_course_email(training_enquiry_obj, start_date, end_date):
     print('\n\n\n')
@@ -119,6 +119,7 @@ def send_new_course_email(training_enquiry_obj, start_date, end_date):
         print("Email sent successfully.")
     except:
         print("Error in sending email.")
+        
     
 def send_fee_submit_email(fee_info_obj):
     print('\n\n\n\n')

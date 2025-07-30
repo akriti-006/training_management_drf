@@ -16,7 +16,6 @@ class ProgrammingLanguage(CommonModel):
     '''
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
-    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -35,7 +34,6 @@ class Framework(CommonModel):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
     language = models.ForeignKey(ProgrammingLanguage, on_delete=models.CASCADE, related_name='frameworks')
-    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -55,7 +53,6 @@ class CourseData(CommonModel):
     description = models.TextField(blank=True, null=True)
     duration_in_weeks = models.PositiveSmallIntegerField()
     total_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    is_deleted = models.BooleanField(default=False)
 
     programming_languages = models.ManyToManyField(ProgrammingLanguage, blank=True)
     frameworks = models.ManyToManyField(Framework, blank=True)
@@ -84,7 +81,6 @@ class TrainingEnquery(CommonModel):
     higher_qualification = models.CharField(max_length=100)
     course = models.ForeignKey(CourseData, on_delete=models.CASCADE)
     status = models.CharField(max_length=20, choices=STATUS_CHOICE)
-    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -111,7 +107,7 @@ class CourseEnrollment(CommonModel):
             raise ValidationError("End date must be after start date.")
 
     def __str__(self):
-        return f"{self.student.email} enrolled in {self.course}"
+        return str(self.id) + f" -- {self.student.email} enrolled in {self.course}"
 
 
 class CourseEnrollmentExtensionLog(CommonModel):
@@ -124,7 +120,6 @@ class CourseEnrollmentExtensionLog(CommonModel):
 class FeeInformation(CommonModel):
     enrollment = models.ForeignKey(CourseEnrollment, on_delete=models.CASCADE)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2)
-
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):

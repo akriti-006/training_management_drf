@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ProgrammingLanguage, Framework, CourseData, TrainingEnquery, CourseEnrollment
+from .models import ProgrammingLanguage, Framework, CourseData, TrainingEnquery, CourseEnrollment, FeeInformation
 
 class ProgrammingLanguageAdmin(admin.ModelAdmin):
     list_display = ['id', 'name', 'description', 'is_deleted']
@@ -15,7 +15,6 @@ admin.site.register(Framework, FrameworkAdmin)
 class CourseDataAdmin(admin.ModelAdmin):
     list_display = ['id', 'name', 'duration_in_weeks', 'total_fee', 'created_by']
 admin.site.register(CourseData, CourseDataAdmin)
-
 
 
 class TrainingEnqueryAdmin(admin.ModelAdmin):
@@ -38,6 +37,7 @@ class TrainingEnqueryAdmin(admin.ModelAdmin):
     ]
 admin.site.register(TrainingEnquery, TrainingEnqueryAdmin)
 
+
 class CourseEnrollmentAdmin(admin.ModelAdmin):
     list_display =['id', 'course__name', 'start_date', 'end_date', 'course_status']
     
@@ -50,3 +50,6 @@ class CourseEnrollmentAdmin(admin.ModelAdmin):
 admin.site.register(CourseEnrollment,CourseEnrollmentAdmin)
 
 
+class FeeInformationAdmin(admin.ModelAdmin):
+    list_display = ['id','enrollment','amount_paid', 'is_deleted', 'created_by']
+admin.site.register(FeeInformation, FeeInformationAdmin)

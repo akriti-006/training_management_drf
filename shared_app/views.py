@@ -3,12 +3,13 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import (
     ProgrammingLanguage, Framework, CourseData,
-    TrainingEnquery, CourseEnrollment
+    TrainingEnquery, CourseEnrollment, FeeInformation
 )
 from .serializers import (
     ProgrammingLanguageSerializer,
     FrameworkSerializer, CourseDataSerializer,
-    TrainingEnquerySerializer, CourseEnrollmentSerializer
+    TrainingEnquerySerializer, CourseEnrollmentSerializer,
+    FeeInformationSerializer
 )
 from .utils import has_permission
 from django.shortcuts import get_object_or_404
@@ -19,8 +20,10 @@ from datetime import datetime, timedelta
 from .models import TrainingEnquery
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db.models import Sum
 
-from training_management.utility.email_functionality import send_welcome_email, send_enquiry_email,send_custom_email
+
+from training_management.utility.email_functionality import send_welcome_email, send_enquiry_email
 
 User = get_user_model()
 
@@ -424,13 +427,8 @@ class TrainingEnqueryListCreateView(APIView):
             data['status'] = 'Enquiry'
             serializer = self.serializer_class(data=data)
             if serializer.is_valid():
-                serializer.save()
-                email = request.data.get('email')
-                send_custom_email(
-                    subject="Welcome to Our App!",
-                    message="Thank you for registering.",
-                    recipient_list=[email]
-                )
+                training_enquiry_obj = serializer.save()
+                send_enquiry_email(training_enquiry_obj)
                 return Response({"message": "Enquiry created successfully",
                         "data": serializer.data},
                         status=status.HTTP_201_CREATED)
@@ -515,7 +513,7 @@ class CourseEnrollmentListCreateView(APIView):
 
     def get(self, request):
         try:
-            obj = self.model.objects.all()
+            obj = self.model.objects.filter(is_deleted=False)
             serializer = self.serializer_class(obj, many = True)
             return Response({"message":"CourseEnrollment fetched successfully", 
                              "data":serializer.data},status=status.HTTP_200_OK)
@@ -549,6 +547,8 @@ class CourseEnrollmentListCreateView(APIView):
         
 
 class CourseEnrollmentDetailView(APIView):
+    model = CourseEnrollment
+    serializer_class = CourseEnrollmentSerializer
 
     def get_object(self, pk):
         return get_object_or_404(CourseEnrollment,pk=pk)
@@ -561,10 +561,14 @@ class CourseEnrollmentDetailView(APIView):
                     "message": "Permission denied",
                     "data": None
                 }, status=status.HTTP_403_FORBIDDEN)
-            serializer = CourseEnrollmentSerializer(obj)
-            return Response({"message": "Course Enrollment Created successfully", "data": serializer.data}, status= status.HTTP_201_CREATED)
+            serializer = self.serializer_class(obj)
+            return Response({
+                "message": "Course Enrollment Created successfully", 
+                "data": serializer.data}, 
+                status= status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"message": str(e), "data": None}, status= status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e), "data": None}, 
+                            status= status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def put(self, request, pk):
         try:
@@ -574,13 +578,19 @@ class CourseEnrollmentDetailView(APIView):
                     "message": "Permission denied",
                     "data": None
                 }, status=status.HTTP_403_FORBIDDEN)
-            serializer = CourseEnrollmentSerializer(obj, data = request.data, partial = True)
+            serializer = CourseEnrollmentSerializer(obj, data = request.data,
+                                                    partial = True)
             if serializer.is_valid():
                 serializer.save()
-                return Response({"message":"Course Enrollment updated successfully", "data": serializer.data},status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    "message":"Course Enrollment updated successfully", 
+                    "data": serializer.data},status=status.HTTP_200_OK)
+            return Response(serializer.errors, 
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"message": str(e), "data": None}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({
+                "message": str(e), "data": None}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def delete(self, request, pk):
         try:
@@ -591,6 +601,117 @@ class CourseEnrollmentDetailView(APIView):
                     "data": None
                 }, status=status.HTTP_403_FORBIDDEN)
             obj.delete()
-            return Response({"message": "Course Enrollment deleted successfully", "data": None}, status=status.HTTP_200_OK)
+            return Response({
+                "message": "Course Enrollment deleted successfully", 
+                "data": None}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"message":str(e), "data": None}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message":str(e), "data": None}, 
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class FeeInformationListCreateView(APIView):
+    model = FeeInformation
+    serializer_class = FeeInformationSerializer
+
+    def get_queryset(self):
+        obj = self.model.objects.filter(is_deleted=False)
+        enrollment_id = self.request.query_params.get('enrollment_id')
+
+        if enrollment_id:
+            obj = obj.filter(enrollment_id=enrollment_id)
+
+        return obj
+
+    def get(self, request):
+        obj = self.get_queryset()
+        serializer = self.serializer_class(obj, many=True)
+        total_paid = obj.aggregate(total=Sum('amount_paid'))['total'] or 0
+        return Response({
+            "message": "Fee records fetched",
+            "total_paid": total_paid,
+            "data": serializer.data},
+            status=status.HTTP_200_OK)
+
+    def post(self, request):
+        try:
+            data = request.data.copy()
+            data['created_by'] = request.user.id
+            serializer = self.serializer_class(data=data)
+
+            if serializer.is_valid():
+                # serializer.save()
+                return Response({
+                    "message": "Fee information created", 
+                    "data": serializer.data},
+                    status=status.HTTP_201_CREATED)
+
+            return Response({
+                "message": "Validation failed", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "message": "Server error", "error": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class FeeInformationDetailView(APIView):
+    model = FeeInformation
+    serializer_class = FeeInformationSerializer
+
+    def get_object(self, pk):
+        return get_object_or_404(FeeInformation,pk=pk)
+    
+    def get( self, request,pk):
+        try:
+            obj = self.get_object(pk)
+            if not has_permission(request.user, obj):
+                return Response({
+                    "message": "Permission denied",
+                    "data": None
+                }, status=status.HTTP_403_FORBIDDEN)
+            serializer = self.serializer_class(obj)
+            return Response({
+                "message": "Fee info fetched successfully", 
+                "data": serializer.data}, 
+                status= status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"message": str(e), "data": None}, 
+                            status= status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def put(self, request, pk):
+        try:
+            obj = self.get_object(pk)
+            if not has_permission(request.user, obj):
+                return Response({
+                    "message": "Permission denied",
+                    "data": None
+                }, status=status.HTTP_403_FORBIDDEN)
+            serializer = self.serializer_class(obj, data = request.data, partial = True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "message":"Fee info updated successfully", 
+                    "data": serializer.data},status=status.HTTP_200_OK)
+            return Response(serializer.errors, 
+                            status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "message": str(e), "data": None}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def delete(self, request, pk):
+        try:
+            obj = self.get_object(pk)
+            if not has_permission(request.user, obj):
+                return Response({
+                    "message": "Permission denied",
+                    "data": None
+                }, status=status.HTTP_403_FORBIDDEN)
+            obj.delete()
+            return Response({
+                "message": "Fee info deleted successfully",
+                "data": None}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"message":str(e), "data": None},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
