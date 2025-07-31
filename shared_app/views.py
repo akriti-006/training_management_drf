@@ -3,30 +3,22 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import (
     ProgrammingLanguage, Framework, CourseData,
-    TrainingEnquery, CourseEnrollment, FeeInformation
+    TrainingEnquery, CourseEnrollment, FeeInformation,
+    CourseEnrollmentExtensionLog
+    
 )
 from .serializers import (
     ProgrammingLanguageSerializer,
     FrameworkSerializer, CourseDataSerializer,
     TrainingEnquerySerializer, CourseEnrollmentSerializer,
-    FeeInformationSerializer
+    FeeInformationSerializer, CourseEnrollmentExtensionLogSerializer
 )
 from .utils import has_permission
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 
-from datetime import datetime, timedelta
-
 from .models import TrainingEnquery
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from django.db.models import Sum
-
-
-from training_management.utility.email_functionality import send_welcome_email, send_enquiry_email
-
-User = get_user_model()
-
 
 class ProgrammingLanguageListCreateView(APIView):
     model = ProgrammingLanguage
@@ -161,18 +153,22 @@ class FrameworkListCreateView(APIView):
     model = Framework
     serializer_class = FrameworkSerializer
 
+    def get_queryset(self, request):
+        is_deleted = request.query_params.get('is_deleted') == 'True'
+        all = request.query_params.get('all') == 'True'
+
+        if all:
+            obj = self.model.objects.all()
+        elif is_deleted:
+            obj = self.model.objects.filter(is_deleted=True)
+        else:
+            obj = self.model.objects.filter(is_deleted=False)
+        
+        return obj
+
     def get(self, request):
         try:
-            is_deleted = request.query_params.get('is_deleted') == 'True'
-            all = request.query_params.get('all') == 'True'
-
-            if all:
-                obj = self.model.objects.all()
-            elif is_deleted:
-                obj = self.model.objects.filter(is_deleted=True)
-            else:
-                obj = self.model.objects.filter(is_deleted=False)
-
+            obj = self.get_queryset(request)
             serializer = self.serializer_class(obj, many=True)
             return Response({
                 "message": "Framework fetched successfully",
@@ -427,8 +423,7 @@ class TrainingEnqueryListCreateView(APIView):
             data['status'] = 'Enquiry'
             serializer = self.serializer_class(data=data)
             if serializer.is_valid():
-                training_enquiry_obj = serializer.save()
-                send_enquiry_email(training_enquiry_obj)
+                serializer.save()
                 return Response({"message": "Enquiry created successfully",
                         "data": serializer.data},
                         status=status.HTTP_201_CREATED)
@@ -525,14 +520,9 @@ class CourseEnrollmentListCreateView(APIView):
         try:
             data = request.data.copy()
             data['created_by'] = request.user.id
-            print("\n\n\n")
-            print("data view : ", data)
-
             serializer = CourseEnrollmentSerializer(data = data)
             if serializer.is_valid():
-                print("validation done")
                 serializer.save()
-                print("instance is saved")
                 return Response({
                     "message":"Course Enrollment created successfully",
                     "data":serializer.data}, 
@@ -613,24 +603,29 @@ class FeeInformationListCreateView(APIView):
     model = FeeInformation
     serializer_class = FeeInformationSerializer
 
-    def get_queryset(self):
-        obj = self.model.objects.filter(is_deleted=False)
+    def get_queryset(self, request):
         enrollment_id = self.request.query_params.get('enrollment_id')
 
         if enrollment_id:
-            obj = obj.filter(enrollment_id=enrollment_id)
-
+            obj = self.model.objects.filter(is_deleted=False, enrollment_id=enrollment_id)
+        else:
+            obj = []
         return obj
 
     def get(self, request):
-        obj = self.get_queryset()
-        serializer = self.serializer_class(obj, many=True)
-        total_paid = obj.aggregate(total=Sum('amount_paid'))['total'] or 0
-        return Response({
-            "message": "Fee records fetched",
-            "total_paid": total_paid,
-            "data": serializer.data},
-            status=status.HTTP_200_OK)
+        obj = self.get_queryset(request)
+        if obj:
+            serializer = self.serializer_class(obj, many=True)
+            total_paid = obj.aggregate(total=Sum('amount_paid'))['total'] or 0
+            return Response({
+                "message": "Fee records fetched",
+                "total_paid": total_paid,
+                "data": serializer.data},
+                status=status.HTTP_200_OK)
+        else:
+            return Response({
+                "message": "enrollment_id is missing."},
+                status=status.HTTP_200_OK)
 
     def post(self, request):
         try:
@@ -639,7 +634,7 @@ class FeeInformationListCreateView(APIView):
             serializer = self.serializer_class(data=data)
 
             if serializer.is_valid():
-                # serializer.save()
+                serializer.save()
                 return Response({
                     "message": "Fee information created", 
                     "data": serializer.data},
@@ -660,7 +655,7 @@ class FeeInformationDetailView(APIView):
     serializer_class = FeeInformationSerializer
 
     def get_object(self, pk):
-        return get_object_or_404(FeeInformation,pk=pk)
+        return get_object_or_404(self.model,pk=pk)
     
     def get( self, request,pk):
         try:
@@ -699,7 +694,7 @@ class FeeInformationDetailView(APIView):
             return Response({
                 "message": str(e), "data": None}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+    
     def delete(self, request, pk):
         try:
             obj = self.get_object(pk)
@@ -711,6 +706,121 @@ class FeeInformationDetailView(APIView):
             obj.delete()
             return Response({
                 "message": "Fee info deleted successfully",
+                "data": None}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"message":str(e), "data": None},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CourseEnrollmentExtensionLogListCreateView(APIView):
+    model = CourseEnrollmentExtensionLog
+    serializer_class = CourseEnrollmentExtensionLogSerializer
+
+    def get_queryset(self, request):
+        enrollment_id = self.request.query_params.get('enrollment_id')
+
+        if enrollment_id:
+            obj = self.model.objects.filter(is_deleted=False, enrollment_id=enrollment_id)
+        else:
+            obj = []
+        return obj
+    
+    def get(self, request):
+        try:
+            obj = self.get_queryset(request)
+            serializer = self.serializer_class(obj, many=True)
+            return Response({
+                "message": "Course Extensions fetched successfully",
+                "data": serializer.data},
+                status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "message": str(e),
+                "data": None
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            data = request.data.copy()
+            data['created_by'] = request.user.id
+            serializer = self.serializer_class(data=data)
+
+            if serializer.is_valid():
+                instance = serializer.save()
+                email_message = "Email sent successfully." if getattr(instance, "_email_sent", False) else "Email sending failed."
+
+                return Response({
+                    "message": "Course extensions created",
+                    "email_status": email_message,
+                    "data": serializer.data},
+                    status=status.HTTP_201_CREATED)
+
+            return Response({
+                "message": "Validation failed", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "message": "Server error", "error": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class CourseEnrollmentExtensionLogDetailView(APIView):
+    model = CourseEnrollmentExtensionLog
+    serializer_class = CourseEnrollmentExtensionLogSerializer
+
+    def get_object(self, pk):
+        return get_object_or_404(self.model, pk=pk)
+
+    def get( self, request,pk):
+        try:
+            obj = self.get_object(pk)
+            if not has_permission(request.user, obj):
+                return Response({
+                    "message": "Permission denied",
+                    "data": None
+                }, status=status.HTTP_403_FORBIDDEN)
+            serializer = self.serializer_class(obj)
+            return Response({
+                "message": "Course extension fetched successfully", 
+                "data": serializer.data}, 
+                status= status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"message": str(e), "data": None}, 
+                            status= status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            obj = self.get_object(pk)
+            if not has_permission(request.user, obj):
+                return Response({
+                    "message": "Permission denied",
+                    "data": None
+                }, status=status.HTTP_403_FORBIDDEN)
+            serializer = self.serializer_class(obj, data = request.data, partial = True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "message":"Course extension updated successfully", 
+                    "data": serializer.data},status=status.HTTP_200_OK)
+            return Response(serializer.errors, 
+                            status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "message": str(e), "data": None}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, pk):
+        try:
+            obj = self.get_object(pk)
+            if not has_permission(request.user, obj):
+                return Response({
+                    "message": "Permission denied",
+                    "data": None
+                }, status=status.HTTP_403_FORBIDDEN)
+            obj.delete()
+            return Response({
+                "message": "Course extension deleted successfully",
                 "data": None}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"message":str(e), "data": None},

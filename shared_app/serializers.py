@@ -2,15 +2,17 @@ from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
 from .models import (
     ProgrammingLanguage, Framework, 
-    CourseData, TrainingEnquery, CourseEnrollment, FeeInformation
+    CourseData, TrainingEnquery, CourseEnrollment, FeeInformation,
+    CourseEnrollmentExtensionLog
 )
-
 from django.db.models import Sum
-
 from rest_framework import serializers
-User = get_user_model()
-
 from datetime import datetime, timedelta
+from training_management.utility.email_functionality import (
+    send_welcome_email, send_enquiry_email,send_new_course_email,
+    send_fee_submit_email, send_course_extension_email
+)
+User = get_user_model()
 
 
 class BaseSerializer(serializers.ModelSerializer):
@@ -91,10 +93,6 @@ class TrainingEnquerySerializer(BaseSerializer):
         model = TrainingEnquery
         fields = '__all__'
         
-    def validate_email(self, value):
-        if TrainingEnquery.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("Email already exists (case-insensitive).")
-        return value
     
     def to_representation(self, instance):
         
@@ -103,10 +101,15 @@ class TrainingEnquerySerializer(BaseSerializer):
         representation['full_name'] = instance.get_full_name
         
         return representation
+    
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        send_enquiry_email(instance)
+
+        return instance
 
         
 class CourseEnrollmentSerializer(BaseSerializer):
-
     training_enquery = serializers.PrimaryKeyRelatedField(
         queryset=TrainingEnquery.objects.filter(is_deleted=False),
         write_only=True
@@ -120,14 +123,8 @@ class CourseEnrollmentSerializer(BaseSerializer):
         fields = '__all__'
     
     def to_internal_value(self, data):
-        print("📌 to_internal_value called")
-        print("data ____________________________ : ", data)
-
         # step-1: fetch TrainingEnquery and check initial status
         obj = TrainingEnquery.objects.get(pk=data['training_enquery'])
-
-        # if obj.status != "Enquiry":
-        #     raise serializers.ValidationError({"training_enquery": "Training Enquery status must be Enquiry."})
 
         # update the status of existing TrainingEnquery
         obj.status = 'In Progress'
@@ -142,13 +139,10 @@ class CourseEnrollmentSerializer(BaseSerializer):
         if user_obj := User.objects.filter(email=email).first():
             # user already exist
             is_new_user = False
-            platform_msg = "Course assigned to the user as this is already exist."
-            # send_new_course_email(obj, course_start_date, end_date)
+            
         else:
             # new user
             is_new_user = True
-            platform_msg = "Course started successfully!."
-            email_msg = f"Hi {obj.first_name} {obj.last_name}, Your account is created for course : {obj.course.name}."
 
             # create user object
             user_obj = User.objects.create_user(
@@ -171,14 +165,14 @@ class CourseEnrollmentSerializer(BaseSerializer):
         start_date = datetime.strptime(data['start_date'], '%Y-%m-%d')
         end_date = start_date + timedelta(weeks=course_duration)
 
+         # Save data needed for email in serializer context
         data['student'] = user_obj.id
         data['course'] = obj.course.id
         data['end_date'] = str(end_date.date())
         data['course_status'] = 'In Progress'
+        self.is_new_user = is_new_user
 
-        print("data : final ", data)
-
-        print("data : final ", data)
+        print("data : ", data)
         return super().to_internal_value(data)
         
     def validate(self, data):
@@ -188,7 +182,6 @@ class CourseEnrollmentSerializer(BaseSerializer):
 
     def to_representation(self, instance):
         """Customize output fields."""
-        print("inside to_representation : ", instance)
         data = super().to_representation(instance)
 
         # Optionally customize student and course representations
@@ -213,26 +206,50 @@ class CourseEnrollmentSerializer(BaseSerializer):
         total_paid = fees.aggregate(total=Sum('amount_paid'))['total'] or 0
 
         # Build the response
-        data['fee Info'] = {
+        data['fee_info'] = {
             "total_fees":instance.course.total_fee,
             "total_paid": total_paid,
             "installments": serializer.data
         }
 
+        extension = instance.courseenrollmentextensionlog_set.filter(enrollment_id=instance, is_deleted=False)
+        serializer = CourseEnrollmentExtensionLogSerializer(extension, many = True)
+        # Build the response
+        data['course_extension_log'] = serializer.data
+
+        if extension.exists():
+            latest_extension = extension.order_by('-created_at').first()
+            if latest_extension and latest_extension.new_end_date:
+                # data['end_date'] = str(instance.end_date)
+                data['extended_end_date'] = str(latest_extension.new_end_date)
+        # else:
+        #     data['end_date'] = str(instance.end_date)
+
         return data
     
     def create(self, validated_data):
-
-        print("B4 validated_data : ", validated_data)
-        
-        validated_data.pop('training_enquery')
+        training_enquery = validated_data.pop('training_enquery')
         fee_amount = validated_data.pop('fee_amount')
-        validated_data.pop('password')
-
-        print("After : ", validated_data)
-        # You can modify validated_data or perform extra actions
+        password = validated_data.pop('password')
+        is_new_user = self.is_new_user
 
         instance = CourseEnrollment.objects.create(**validated_data)
+
+        if is_new_user:
+            pass
+            send_welcome_email(
+                training_enquery,
+                password,
+                str(validated_data['start_date']),
+                str(validated_data['end_date']),
+                is_new_user
+            )
+        else:
+            send_new_course_email(
+                training_enquery,
+                str(validated_data['start_date']),
+                str(validated_data['end_date']),
+            )
 
         # CourseEnrollment instance is saved, next step is to create FeeInformation
         new_data = {}
@@ -240,13 +257,9 @@ class CourseEnrollmentSerializer(BaseSerializer):
         new_data['amount_paid'] = fee_amount
         new_data['created_by'] = instance.created_by.id
 
-        print("new_data : ", new_data)
-
         serializer = FeeInformationSerializer(data = new_data)
         if serializer.is_valid():
             serializer.save()
-
-        print("data is saved for FeeInformation")
 
         return instance
 
@@ -271,11 +284,6 @@ class FeeInformationSerializer(BaseSerializer):
             raise serializers.ValidationError(
                     {f"Your pending fee is {pending_amount}"}
                 )
-                
-        print("\n\n\n")
-        print("amount_paid: ",amount_paid)
-        print("total_amount_paid: ",total_amount_paid)
-        print("enrollment: ",type(enrollment))
 
         if enrollment and amount_paid:
             total_amount = enrollment.course.total_fee
@@ -285,4 +293,44 @@ class FeeInformationSerializer(BaseSerializer):
                 )
         
         return data
+    
+    def create(self, validated_data):
+        instance = FeeInformation.objects.create(**validated_data)
+        print("Instance is created, going to send email")
+        send_fee_submit_email(instance)
+        print("Email sent")
+
+        return instance
+
+class CourseEnrollmentExtensionLogSerializer(BaseSerializer):
+    class Meta:
+        model = CourseEnrollmentExtensionLog
+        fields = '__all__'
+
+    def validate(self, data):
+        enrollment = data.get('enrollment')
+        new_end_date = data.get('new_end_date')
+
+        if new_end_date < enrollment.start_date:
+            raise serializers.ValidationError({
+                'new_end_date': 'New end date cannot be earlier than the course start date.'
+            })
+        return data
+
+    def create(self, validated_data):
+        enrollment = validated_data['enrollment']
+        remark = validated_data['remark']
+        new_end_date = str(validated_data['new_end_date'])
+
+        email_sent = False
+        email_sent = send_course_extension_email(
+            enrollment,
+            remark,
+            new_end_date
+        )
+
+        instance = CourseEnrollmentExtensionLog.objects.create(**validated_data)
+        instance._email_sent = email_sent
+
+        return instance
     

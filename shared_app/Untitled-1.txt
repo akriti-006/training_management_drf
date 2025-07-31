@@ -1,4 +1,0 @@
-
-DRF  --->>>> Django
-
-MyPro --->>> exp --->>> 

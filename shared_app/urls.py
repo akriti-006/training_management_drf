@@ -6,7 +6,8 @@ from .views import (
     CourseDataListCreateView, CourseDataDetailView,
     TrainingEnqueryListCreateView, TrainingEnqueryDetailView,
     CourseEnrollmentListCreateView, CourseEnrollmentDetailView,
-    FeeInformationListCreateView, FeeInformationDetailView
+    FeeInformationListCreateView, FeeInformationDetailView,
+    CourseEnrollmentExtensionLogListCreateView, CourseEnrollmentExtensionLogDetailView
 )
 
 urlpatterns = [
@@ -27,5 +28,8 @@ urlpatterns = [
 
     path('fee-info/', FeeInformationListCreateView.as_view(), name='fee-info-list-create'),
     path('fee-info/<int:pk>', FeeInformationDetailView.as_view(), name='fee-info-detail'),
+
+    path('extensions/', CourseEnrollmentExtensionLogListCreateView.as_view(), name='extension-list-create'),
+    path('extensions/<int:pk>/', CourseEnrollmentExtensionLogDetailView.as_view(), name='extension-detail'),
 
 ]

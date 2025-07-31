@@ -63,7 +63,7 @@ class CourseData(CommonModel):
         ]
 
     def __str__(self):
-        return self.name
+        return str(self.id) +"-->"+self.name
     
     def delete(self, *args, **kwargs):
         self.is_deleted = True
@@ -107,7 +107,7 @@ class CourseEnrollment(CommonModel):
             raise ValidationError("End date must be after start date.")
 
     def __str__(self):
-        return str(self.id) + f" -- {self.student.email} enrolled in {self.course}"
+        return str(self.id) + f" -- {self.student.email}"
 
 
 class CourseEnrollmentExtensionLog(CommonModel):
