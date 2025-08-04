@@ -236,7 +236,7 @@ class CourseEnrollmentSerializer(BaseSerializer):
         instance = CourseEnrollment.objects.create(**validated_data)
 
         if is_new_user:
-            pass
+            
             send_welcome_email(
                 training_enquery,
                 password,

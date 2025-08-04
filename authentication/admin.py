@@ -12,6 +12,7 @@ def mark_as_repaired(modeladmin, request, queryset):
 @admin.action(description='Mark selected cars as Purchased')
 def mark_as_purchased(modeladmin, request, queryset):
     queryset.update(status='purchased')
+    
 
 class CarAdmin(admin.ModelAdmin):
     list_display = ['id','name', 'price', 'status']

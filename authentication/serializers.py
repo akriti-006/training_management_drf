@@ -3,6 +3,8 @@ from django.contrib.auth import authenticate
 from .models import User
 from django.contrib.auth import get_user_model
 User = get_user_model()
+from django.contrib.auth.models import Group
+
 
 class BaseSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
@@ -20,34 +22,18 @@ class BaseSerializer(serializers.ModelSerializer):
         return representation
 
 
-# class RegisterSerializer(BaseSerializer):
-#     confirm_password = serializers.CharField(write_only=True)
-
-#     class Meta:
-#         model = User
-#         fields = ['id', 'first_name', 'last_name', 'email', 'password', 'confirm_password']
-#         extra_kwargs = {
-#             'password': {'write_only': True},
-#             'id': {'read_only': True}
-#         }
-
-#     def validate(self, data):
-#         if data['password'] != data['confirm_password']:
-#             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
-#         return data
-
-#     def create(self, validated_data):
-#         validated_data.pop('confirm_password')
-#         return User.objects.create_user(**validated_data)
-
-
 class LoginSerializer(serializers.ModelSerializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+    groups = serializers.SlugRelatedField(
+        many=True,
+        read_only=True,
+        slug_field='name'  # This shows the group name instead of the ID
+    )
 
     class Meta:
         model = User
-        fields = ['email', 'password']
+        fields = ['email', 'password', 'groups']
 
     def validate(self, data):
         username = data.get('email')  # authenticate() still needs username

@@ -6,7 +6,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from .serializers import LoginSerializer, UserSerializer, ResetPasswordSerializer
 from training_management.utility.email_functionality import send_welcome_email, send_enquiry_email
 from .models import User
-from .utils import IsHRGroupOrReadOnly
 
 
 class LoginAPIView(APIView):
@@ -17,15 +16,21 @@ class LoginAPIView(APIView):
             serializer = LoginSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.user
-                token, created = Token.objects.get_or_create(user=user)      
+                token, created = Token.objects.get_or_create(user=user)
+
+                # Add group names manually
+                group_names = list(user.groups.values_list('name', flat=True))
+
                 return Response({
                     "message": "Login successful",
                     "data": {
-                        'user_data': serializer.data,
+                        'email': user.email,
+                        'groups': group_names,
                         "token": token.key
                     },
                     "status": status.HTTP_200_OK
                 }, status=status.HTTP_200_OK)
+
             return Response({
                 "message": "Login failed",
                 "data": serializer.errors,
@@ -37,7 +42,6 @@ class LoginAPIView(APIView):
                 "data": str(e),
                 "status": status.HTTP_500_INTERNAL_SERVER_ERROR
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class LogoutAPIView(APIView):
     
@@ -86,7 +90,7 @@ class UserListView(APIView):
 class UserDetailView(APIView):
     model = User
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated, IsHRGroupOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
         try:
@@ -104,10 +108,10 @@ class UserDetailView(APIView):
             serializer = self.serializer_class(obj)
             return Response({
                 "message": "User fetched successfully", 
-                "data": serializer.data}, 
+                "data": serializer.data},
                 status= status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"message": str(e), "data": None}, 
+            return Response({"message": str(e), "data": None},
                             status= status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def put(self, request, pk):
@@ -120,13 +124,13 @@ class UserDetailView(APIView):
             if serializer.is_valid():
                 serializer.save()
                 return Response({
-                    "message":"User updated successfully", 
+                    "message":"User updated successfully",
                     "data": serializer.data},status=status.HTTP_200_OK)
             return Response(serializer.errors, 
                             status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({
-                "message": str(e), "data": None}, 
+                "message": str(e), "data": None},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
@@ -134,20 +138,20 @@ class UserDetailView(APIView):
         try:
             obj = self.get_object(pk)
             if not obj:
-                return Response({"error": "User not found"}, 
+                return Response({"error": "User not found"},
                                 status=status.HTTP_404_NOT_FOUND)
             obj.delete()
             return Response({
-                "message": "User deleted successfully"}, 
+                "message": "User deleted successfully"},
                 status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"message":str(e)}, 
+            return Response({"message":str(e)},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
 class ResetPasswordView(APIView):
     serializer_class = ResetPasswordSerializer
-    permission_classes = [IsAuthenticated, IsHRGroupOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data, context={'request': request})

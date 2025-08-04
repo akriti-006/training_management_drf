@@ -17,7 +17,6 @@ from .utils import has_permission
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 
-from .models import TrainingEnquery
 from django.db.models import Sum
 
 class ProgrammingLanguageListCreateView(APIView):
@@ -520,7 +519,7 @@ class CourseEnrollmentListCreateView(APIView):
         try:
             data = request.data.copy()
             data['created_by'] = request.user.id
-            serializer = CourseEnrollmentSerializer(data = data)
+            serializer = self.serializer_class(data = data)
             if serializer.is_valid():
                 serializer.save()
                 return Response({
@@ -648,69 +647,6 @@ class FeeInformationListCreateView(APIView):
             return Response({
                 "message": "Server error", "error": str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-class FeeInformationDetailView(APIView):
-    model = FeeInformation
-    serializer_class = FeeInformationSerializer
-
-    def get_object(self, pk):
-        return get_object_or_404(self.model,pk=pk)
-    
-    def get( self, request,pk):
-        try:
-            obj = self.get_object(pk)
-            if not has_permission(request.user, obj):
-                return Response({
-                    "message": "Permission denied",
-                    "data": None
-                }, status=status.HTTP_403_FORBIDDEN)
-            serializer = self.serializer_class(obj)
-            return Response({
-                "message": "Fee info fetched successfully", 
-                "data": serializer.data}, 
-                status= status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"message": str(e), "data": None}, 
-                            status= status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    def put(self, request, pk):
-        try:
-            obj = self.get_object(pk)
-            if not has_permission(request.user, obj):
-                return Response({
-                    "message": "Permission denied",
-                    "data": None
-                }, status=status.HTTP_403_FORBIDDEN)
-            serializer = self.serializer_class(obj, data = request.data, partial = True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response({
-                    "message":"Fee info updated successfully", 
-                    "data": serializer.data},status=status.HTTP_200_OK)
-            return Response(serializer.errors, 
-                            status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({
-                "message": str(e), "data": None}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def delete(self, request, pk):
-        try:
-            obj = self.get_object(pk)
-            if not has_permission(request.user, obj):
-                return Response({
-                    "message": "Permission denied",
-                    "data": None
-                }, status=status.HTTP_403_FORBIDDEN)
-            obj.delete()
-            return Response({
-                "message": "Fee info deleted successfully",
-                "data": None}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"message":str(e), "data": None},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class CourseEnrollmentExtensionLogListCreateView(APIView):
     model = CourseEnrollmentExtensionLog

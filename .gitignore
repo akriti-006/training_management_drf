@@ -37,3 +37,5 @@ Desktop.ini
 
 **/migrations/*.py
 !**/migrations/__init__.py
+
+db.json
